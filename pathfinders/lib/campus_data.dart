@@ -1,4 +1,3 @@
-import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
 
 final campusLocations = {
@@ -53,15 +52,14 @@ List<double> vector(
   double userLongitude,
   String buildingName,
 ) {
-  late double buildingLatitude;
-  late double buildingLongitude;
+  final coordinates = campusLocations[buildingName];
 
-  if (campusLocations[buildingName] != null) {
-    buildingLatitude = campusLocations[buildingName]![0];
-    buildingLongitude = campusLocations[buildingName]![1];
-  } else {
+  if (coordinates == null) {
     throw Exception('Building not found');
   }
+
+  final buildingLatitude = coordinates[0];
+  final buildingLongitude = coordinates[1];
 
   double distance = Geolocator.distanceBetween(
     userLatitude,
@@ -69,6 +67,7 @@ List<double> vector(
     buildingLatitude,
     buildingLongitude
   );
+
   double bearing = Geolocator.bearingBetween(
     userLatitude,
     userLongitude,

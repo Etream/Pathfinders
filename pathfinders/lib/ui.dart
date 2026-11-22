@@ -1,26 +1,55 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'campus_data.dart';
 
 class CompassScreen extends StatefulWidget {
-  const CompassScreen({super.key});
+  final double? userLatitude;
+  final double? userLongitude;
+  final double? compassHeading;
+
+  const CompassScreen({
+    super.key,
+    this.userLatitude,
+    this.userLongitude,
+    this.compassHeading,
+  });
 
   @override
   State<CompassScreen> createState() => _CompassScreenState();
 }
 
 class _CompassScreenState extends State<CompassScreen> {
+
   // Mock list of campus buildings for the dropdown
-  final List<String> buildings = [
-    'Minto Centre',
-    'Canal Building',
-    'Azrieli Pavilion',
-    'Herzberg Laboratories',
-  ];
+  final List<String> buildings = campusLocations.keys.toList();
   
-  String? selectedBuilding = 'Minto Centre';
+  String? selectedBuilding = 'MacOdrum Library';
+
+  @override
+  void initState() {
+    super.initState();
+    selectedBuilding = buildings.isNotEmpty ? buildings.first : null;
+  }
 
   @override
   Widget build(BuildContext context) {
+
+    //Fallback values while testing before live GPS/compass are passed in
+    final double lat = widget.userLatitude ?? 45.3827;
+    final double lng = widget.userLongitude ?? -75.6982;
+    final double heading = widget.compassHeading ?? 0.0;
+
+    double distanceMeters = 240.0;
+    double bearingDegrees = 45.0;
+
+    if (selectedBuilding != null) {
+      final metrics = vector(lat, lng, selectedBuilding!);
+      distanceMeters = metrics[0];
+      bearingDegrees = metrics[1];
+    }
+
+    final double arrowAngleRadians = (bearingDegrees - heading) * (math.pi / 180);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Campus Navigator'),
@@ -60,7 +89,7 @@ class _CompassScreenState extends State<CompassScreen> {
 
             // Step 3: Spinning Arrow in the Middle (using a test angle)
             Transform.rotate(
-              angle: 45 * (math.pi / 180), // 45 degrees in radians for testing
+              angle: arrowAngleRadians, // 45 degrees in radians for testing
               child: const Icon(
                 Icons.navigation,
                 size: 120,
@@ -69,10 +98,10 @@ class _CompassScreenState extends State<CompassScreen> {
             ),
 
             // Step 4: Distance Text at the Bottom
-            const Column(
+            Column(
               children: [
                 Text(
-                  '240 meters away',
+                  '${distanceMeters.round()} meters away',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -80,7 +109,7 @@ class _CompassScreenState extends State<CompassScreen> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Head North-East',
+                  'Bearing: ${bearingDegrees.round()}',
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.grey,

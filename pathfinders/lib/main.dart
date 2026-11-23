@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:pathfinders/campus_data.dart';
 import 'ui.dart';
-import 'heading_slider.dart'; // importing heading_slider 
+import 'heading_slider.dart';
+import 'sensor_service.dart'; 
 
 // //import 'package:flutter/material.dart';
 // import 'dart:math' as math;
@@ -116,7 +119,8 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: CompassScreen(),
+      home: MainNavigatorScreen(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
@@ -131,8 +135,154 @@ class MainNavigatorScreen extends StatefulWidget { // StatefulWidget changes the
 }
 
 class _NavigatorScreenState extends State<MainNavigatorScreen> {
+  final SensorService _sensorService = SensorService();
+
+
+// TODO: Screen state & Campus coordinates
+
+// Campus coordinates for buildings (Minot, Canal, etc.)
+  final List<String> _buildings = campusLocations.keys.toList();
+  late String _selectedBuilding = _buildings.first;
+
   double _testHeading = 0.0;  // _testHeading varibale will represent the direction from 0.0 to 360 degrees
+
+// if GPS hasn't loaded in the emulator, then we can fallback to startign location
+
+  double _currentLat = 45.38206408365617;
+  double _currentLng = -75.69977042560764;
+  String _gpsStatus = 'Using default campus spot (tap "Update GPS")';
+
+  @override 
+  void initState() {
+    super.initState();
+    _fetchLocation();
+  }
+
+// TODO: GPS fetching
+
+  Future<void> _fetchLocation() async {
+    setState(() {
+      _gpsStatus = 'Fetching the GPS location...';
+    });
+    
+    try {
+      final Position location = await _sensorService
+        .getCurrentPosition()
+        .timeout(const Duration(seconds: 10)); // wait up to 10 seconds for a reading on the GPS, this is for the emulator
+
+      if (!mounted) return;
+
+      setState(() {
+        _currentLat = location.latitude;
+        _currentLng = location.longitude;
+        _gpsStatus = 'GPS updated';
+      });
+
+    } catch (e) {
+      // if GPS is off, or other reason, keep the fallback coordinates
+      if (!mounted) return;
+      setState(() {
+        _gpsStatus = 'Using simulated campus GPS';
+      });
+    }
+  }
+
+  // TODO: convert the compass into something readable like 'Heading North'
+  String _bearingToCardinal(double bearing) {
+    // 0 to 360 degrees range
+    final normalized = ((bearing % 360) + 360) % 360;
+
+    // Compass sections
+    const directions = [
+      'North',
+      'North-East',
+      'East',
+      'South-East',
+      'South',
+      'South-West',
+      'West',
+      'North-West',
+    ];
+
+    final index = ((normalized + 22.5) % 360) ~/ 45;
+    return 'Head ${directions[index]}';
+  }
 }
 
+// TODO: Layout 
 
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: const Text('Campus Navigator'),
+//       ),
+//       body: Padding(
+//         padding: const EdgeInsets.all(24.0),
+//         child: Column(
+//           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//           children: [
+//             // Step 2: Dropdown Menu at the Top
+//             Container(
+//               padding: const EdgeInsets.symmetric(horizontal: 16.0),
+//               decoration: BoxDecoration(
+//                 border: Border.all(color: Colors.grey),
+//                 borderRadius: BorderRadius.circular(8.0),
+//               ),
+//               child: DropdownButton<String>(
+//                 value: selectedBuilding,
+//                 isExpanded: true,
+//                 underline: const SizedBox(),
+//                 items: buildings.map((String building) {
+//                   return DropdownMenuItem<String>(
+//                     value: building,
+//                     child: Text(
+//                       building,
+//                       style: const TextStyle(fontSize: 18),
+//                     ),
+//                   );
+//                 }).toList(),
+//                 onChanged: (String? newValue) {
+//                   setState(() {
+//                     selectedBuilding = newValue;
+//                   });
+//                 },
+//               ),
+//             ),
 
+//             // Step 3: Spinning Arrow in the Middle (using a test angle)
+//             Transform.rotate(
+//               angle: 45 * (math.pi / 180), // 45 degrees in radians for testing
+//               child: const Icon(
+//                 Icons.navigation,
+//                 size: 120,
+//                 color: Colors.blue,
+//               ),
+//             ),
+
+//             // Step 4: Distance Text at the Bottom
+//             const Column(
+//               children: [
+//                 Text(
+//                   '240 meters away',
+//                   style: TextStyle(
+//                     fontSize: 24,
+//                     fontWeight: FontWeight.bold,
+//                   ),
+//                 ),
+//                 SizedBox(height: 8),
+//                 Text(
+//                   'Head North-East',
+//                   style: TextStyle(
+//                     fontSize: 16,
+//                     color: Colors.grey,
+//                   ),
+//                 ),
+//               ],
+//             ),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+// }

@@ -207,21 +207,41 @@ class _NavigatorScreenState extends State<MainNavigatorScreen> {
     final index = ((normalized + 22.5) % 360) ~/ 45;
     return 'Head ${directions[index]}';
   }
+
+
+// TODO: Visual Layout 
+
+  @override
+  Widget build(BuildContext context) {
+    // vector will return [distance(in meters), bearing(direction in degrees)]
+    final navVector = vector(_currentLat, _currentLng, _selectedBuilding);
+    final double distanceMeters = navVector[0];
+    final double bearingToTarget = navVector[1];
+
+    // Then to rotate arrow to the direction of bearing that is currently facing
+    final double arrowAngle = ((bearingToTarget - _testHeading) % 360 + 360) % 360;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Pathfinder Navigator')),
+        body: Center(
+          child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Target: $_selectedBuilding'),
+                Text('Distance: ${distanceMeters.round()} m'),
+                Text('Arrow angle: ${arrowAngle.round()} degrees'),
+                Text(_bearingToCardinal(bearingToTarget)),
+                Text(_gpsStatus),
+                const SizedBox(height: 16),
+                headingSlider(_testHeading, (val) {
+                  setState(() => _testHeading = val);
+                }),
+              ],
+          ),
+        ),
+    );
+  }
 }
-
-// TODO: Layout 
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: const Text('Campus Navigator'),
-//       ),
-//       body: Padding(
-//         padding: const EdgeInsets.all(24.0),
-//         child: Column(
-//           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//           children: [
 //             // Step 2: Dropdown Menu at the Top
 //             Container(
 //               padding: const EdgeInsets.symmetric(horizontal: 16.0),

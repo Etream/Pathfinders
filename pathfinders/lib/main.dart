@@ -223,22 +223,72 @@ class _NavigatorScreenState extends State<MainNavigatorScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Pathfinder Navigator')),
-        body: Center(
-          child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+        body: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Step 2: Dropdown Menu at the Top
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey),
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+              child: DropdownButton<String>(
+                value: _selectedBuilding,
+                isExpanded: true,
+                underline: const SizedBox(),
+                items: _buildings.map((String building) {
+                  return DropdownMenuItem<String>(
+                    value: building,
+                    child: Text(
+                      building,
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _selectedBuilding = newValue!;
+                  });
+                },
+              ),
+            ),
+
+            // Step 3: Spinning Arrow in the Middle (using a test angle)
+            Transform.rotate(
+              angle: arrowAngle, // 45 degrees in radians for testing
+              child: const Icon(
+                Icons.navigation,
+                size: 120,
+                color: Colors.blue,
+              ),
+            ),
+
+            // Step 4: Distance Text at the Bottom
+            Column(
               children: [
-                Text('Target: $_selectedBuilding'),
-                Text('Distance: ${distanceMeters.round()} m'),
-                Text('Arrow angle: ${arrowAngle.round()} degrees'),
-                Text(_bearingToCardinal(bearingToTarget)),
-                Text(_gpsStatus),
-                const SizedBox(height: 16),
-                headingSlider(_testHeading, (val) {
-                  setState(() => _testHeading = val);
-                }),
+                Text(
+                  '${distanceMeters.round()} meters away',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Bearing: ${bearingToTarget.round()}',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey,
+                  ),
+                ),
               ],
-          ),
+            ),
+          ],
         ),
+      ),
     );
   }
 }

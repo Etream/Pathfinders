@@ -140,6 +140,7 @@ class _NavigatorScreenState extends State<MainNavigatorScreen> {
       });
 
     } catch (e) {
+      debugPrint('failed: $e');
       // if GPS is off, or other reason, keep the fallback coordinates
       if (!mounted) return;
       setState(() {
@@ -243,17 +244,17 @@ class _NavigatorScreenState extends State<MainNavigatorScreen> {
             Column(
               children: [
                 Text('Heading: ${_testHeading.round()}°'),
-                Slider(
-                  min: 0,
-                  max: 360,
-                  value: _testHeading.clamp(0.0, 360.0),
-                  onChanged: (double newValue) {
-                    setState(() {
-                      _useManualHeading = true;
-                      _testHeading = ((newValue % 360) + 360) % 360;
-                    });
-                  },
-                ),
+                //Slider(
+                  // min: 0,
+                  // max: 360,
+                  // value: _testHeading.clamp(0.0, 360.0),
+                  // onChanged: (double newValue) {
+                  //   setState(() {
+                  //     _useManualHeading = true;
+                  //     _testHeading = ((newValue % 360) + 360) % 360;
+                  //   });
+                //   },
+                // ),
               ],
             ),
             // Step 4: Distance Text at the Bottom

@@ -1,107 +1,10 @@
+import 'dart:async';
+import 'dart:math' as math; // dart math for rotating arrow
+import 'package:flutter_compass/flutter_compass.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:pathfinders/campus_data.dart';
-import 'ui.dart';
-import 'heading_slider.dart';
 import 'sensor_service.dart'; 
-
-// //import 'package:flutter/material.dart';
-// import 'dart:math' as math;
-
-// class CompassScreen extends StatefulWidget {
-//   const CompassScreen({super.key});
-
-//   @override
-//   State<CompassScreen> createState() => _CompassScreenState();
-// }
-
-// class _CompassScreenState extends State<CompassScreen> {
-//   // Mock list of campus buildings for the dropdown
-//   final List<String> buildings = [
-//     'Minto Centre',
-//     'Canal Building',
-//     'Azrieli Pavilion',
-//     'Herzberg Laboratories',
-//   ];
-  
-//   String? selectedBuilding = 'Minto Centre';
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: const Text('Campus Navigator'),
-//       ),
-//       body: Padding(
-//         padding: const EdgeInsets.all(24.0),
-//         child: Column(
-//           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//           children: [
-//             // Step 2: Dropdown Menu at the Top
-//             Container(
-//               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-//               decoration: BoxDecoration(
-//                 border: Border.all(color: Colors.grey),
-//                 borderRadius: BorderRadius.circular(8.0),
-//               ),
-//               child: DropdownButton<String>(
-//                 value: selectedBuilding,
-//                 isExpanded: true,
-//                 underline: const SizedBox(),
-//                 items: buildings.map((String building) {
-//                   return DropdownMenuItem<String>(
-//                     value: building,
-//                     child: Text(
-//                       building,
-//                       style: const TextStyle(fontSize: 18),
-//                     ),
-//                   );
-//                 }).toList(),
-//                 onChanged: (String? newValue) {
-//                   setState(() {
-//                     selectedBuilding = newValue;
-//                   });
-//                 },
-//               ),
-//             ),
-
-//             // Step 3: Spinning Arrow in the Middle (using a test angle)
-//             Transform.rotate(
-//               angle: 45 * (math.pi / 180), // 45 degrees in radians for testing
-//               child: const Icon(
-//                 Icons.navigation,
-//                 size: 120,
-//                 color: Colors.blue,
-//               ),
-//             ),
-
-//             // Step 4: Distance Text at the Bottom
-//             const Column(
-//               children: [
-//                 Text(
-//                   '240 meters away',
-//                   style: TextStyle(
-//                     fontSize: 24,
-//                     fontWeight: FontWeight.bold,
-//                   ),
-//                 ),
-//                 SizedBox(height: 8),
-//                 Text(
-//                   'Head North-East',
-//                   style: TextStyle(
-//                     fontSize: 16,
-//                     color: Colors.grey,
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-// }
-
 
 
 void main() {
@@ -136,7 +39,13 @@ class MainNavigatorScreen extends StatefulWidget { // StatefulWidget changes the
 
 class _NavigatorScreenState extends State<MainNavigatorScreen> {
   final SensorService _sensorService = SensorService();
+  StreamSubscription<CompassEvent>? _compassSub; // Stream subscriptions and timer for the live compass and GPS (10s)
+  StreamSubscription<Position>? _positionSub;
+  Timer? _gpsTimer;
 
+  // To prevent theGPS fetch and the slider from being overwritten by compass
+  bool _isFetchingLocation = false; 
+  bool _useManualHeading = false;
 
 // TODO: Screen state & Campus coordinates
 
@@ -146,7 +55,7 @@ class _NavigatorScreenState extends State<MainNavigatorScreen> {
 
   double _testHeading = 0.0;  // _testHeading varibale will represent the direction from 0.0 to 360 degrees
 
-// if GPS hasn't loaded in the emulator, then we can fallback to startign location
+// if GPS hasn't loaded in the emulator, then we can fallback to starting location
 
   double _currentLat = 45.38206408365617;
   double _currentLng = -75.69977042560764;
@@ -156,11 +65,63 @@ class _NavigatorScreenState extends State<MainNavigatorScreen> {
   void initState() {
     super.initState();
     _fetchLocation();
+
+    // Listen to compass headings unless the user has locked in a heading with the slider
+    _compassSub = FlutterCompass.events?.listen((CompassEvent event) {
+      final double? heading = event.heading;
+      if (heading != null && mounted && !_useManualHeading) {
+        final double normalizedHeading = ((heading % 360) + 360) % 360;
+        setState(() {
+          _testHeading = normalizedHeading;
+        });
+      }
+    });
+  
+    // Listen for continous position updates whenever the user has moved about 2 meters
+  _positionSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 2,
+      ),
+    ).listen(
+      (Position position) {
+        if (!mounted) return;
+        setState(() {
+          _currentLat = position.latitude;
+          _currentLng = position.longitude;
+          _gpsStatus = 'Live GPS tracking';
+        });
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() {
+          _gpsStatus = 'Using simulated/fallback GPS';
+        });
+      },
+    );
+
+    // GPS refresh every 10 seconds
+    _gpsTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) {
+        _fetchLocation();
+      }
+    });
   }
 
-// TODO: GPS fetching
+  @override
+  void dispose() {
+    // Cancel whatever active timer and stream subsscriptions to prevent memory leaks
+    _gpsTimer?.cancel();
+    _compassSub?.cancel();
+    _positionSub?.cancel();
+    super.dispose();
+  }
 
   Future<void> _fetchLocation() async {
+    // Skip fetching if GPS request is already being done or the widget isn't mounted anymore
+    if (_isFetchingLocation || !mounted) return;
+    _isFetchingLocation = true;
+
     setState(() {
       _gpsStatus = 'Fetching the GPS location...';
     });
@@ -184,12 +145,16 @@ class _NavigatorScreenState extends State<MainNavigatorScreen> {
       setState(() {
         _gpsStatus = 'Using simulated campus GPS';
       });
+    } finally {
+      // Release the fetch lcok so the timer or button calls can run
+      _isFetchingLocation = false;
     }
   }
+  
 
   // TODO: convert the compass into something readable like 'Heading North'
   String _bearingToCardinal(double bearing) {
-    // 0 to 360 degrees range
+    // Normalize any angles, like negative ones, into a 0-360 degree range
     final normalized = ((bearing % 360) + 360) % 360;
 
     // Compass sections
@@ -209,20 +174,28 @@ class _NavigatorScreenState extends State<MainNavigatorScreen> {
   }
 
 
-// TODO: Visual Layout 
-
   @override
   Widget build(BuildContext context) {
     // vector will return [distance(in meters), bearing(direction in degrees)]
     final navVector = vector(_currentLat, _currentLng, _selectedBuilding);
-    final double distanceMeters = navVector[0];
-    final double bearingToTarget = navVector[1];
+    final double distanceMeters = (navVector[0] as num).toDouble();
 
-    // Then to rotate arrow to the direction of bearing that is currently facing
+    // Normalize bearing so negative bearings, i.e -135 degress -> 225 degress
+    final double bearingToTarget = ((navVector[1] as num).toDouble() % 360 + 360) % 360;
+
+    // Rotate the arrow relative to user's current heading
     final double arrowAngle = ((bearingToTarget - _testHeading) % 360 + 360) % 360;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Pathfinder Navigator')),
+      appBar: AppBar(title: const Text('Pathfinder Navigator'),
+        actions: [
+          IconButton(
+            onPressed: _fetchLocation,
+            icon: const Icon(Icons.my_location),
+            tooltip: 'Update GPS',
+          ),
+        ],
+      ),
         body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
@@ -258,29 +231,62 @@ class _NavigatorScreenState extends State<MainNavigatorScreen> {
 
             // Step 3: Spinning Arrow in the Middle (using a test angle)
             Transform.rotate(
-              angle: arrowAngle, // 45 degrees in radians for testing
+              angle: arrowAngle * (math.pi / 180), // 45 degrees in radians for testing
               child: const Icon(
                 Icons.navigation,
                 size: 120,
                 color: Colors.blue,
               ),
             ),
-
+            
+            // Manual heading slider
+            Column(
+              children: [
+                Text('Heading: ${_testHeading.round()}°'),
+                Slider(
+                  min: 0,
+                  max: 360,
+                  value: _testHeading.clamp(0.0, 360.0),
+                  onChanged: (double newValue) {
+                    setState(() {
+                      _useManualHeading = true;
+                      _testHeading = ((newValue % 360) + 360) % 360;
+                    });
+                  },
+                ),
+              ],
+            ),
             // Step 4: Distance Text at the Bottom
             Column(
               children: [
                 Text(
+                  _bearingToCardinal(bearingToTarget),
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
                   '${distanceMeters.round()} meters away',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
-                  'Bearing: ${bearingToTarget.round()}',
-                  style: TextStyle(
+                  'Bearing: ${bearingToTarget.round()}°',
+                  style: const TextStyle(
                     fontSize: 16,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _gpsStatus,
+                  style: const TextStyle(
+                    fontSize: 12,
                     color: Colors.grey,
                   ),
                 ),
@@ -292,67 +298,3 @@ class _NavigatorScreenState extends State<MainNavigatorScreen> {
     );
   }
 }
-//             // Step 2: Dropdown Menu at the Top
-//             Container(
-//               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-//               decoration: BoxDecoration(
-//                 border: Border.all(color: Colors.grey),
-//                 borderRadius: BorderRadius.circular(8.0),
-//               ),
-//               child: DropdownButton<String>(
-//                 value: selectedBuilding,
-//                 isExpanded: true,
-//                 underline: const SizedBox(),
-//                 items: buildings.map((String building) {
-//                   return DropdownMenuItem<String>(
-//                     value: building,
-//                     child: Text(
-//                       building,
-//                       style: const TextStyle(fontSize: 18),
-//                     ),
-//                   );
-//                 }).toList(),
-//                 onChanged: (String? newValue) {
-//                   setState(() {
-//                     selectedBuilding = newValue;
-//                   });
-//                 },
-//               ),
-//             ),
-
-//             // Step 3: Spinning Arrow in the Middle (using a test angle)
-//             Transform.rotate(
-//               angle: 45 * (math.pi / 180), // 45 degrees in radians for testing
-//               child: const Icon(
-//                 Icons.navigation,
-//                 size: 120,
-//                 color: Colors.blue,
-//               ),
-//             ),
-
-//             // Step 4: Distance Text at the Bottom
-//             const Column(
-//               children: [
-//                 Text(
-//                   '240 meters away',
-//                   style: TextStyle(
-//                     fontSize: 24,
-//                     fontWeight: FontWeight.bold,
-//                   ),
-//                 ),
-//                 SizedBox(height: 8),
-//                 Text(
-//                   'Head North-East',
-//                   style: TextStyle(
-//                     fontSize: 16,
-//                     color: Colors.grey,
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-// }
